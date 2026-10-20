@@ -1,0 +1,18 @@
+services:
+  lightsail-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ACCOUNTS_CONFIG: /app/config/accounts.json
+      SCRIPTS_DIR: /app/scripts
+      AWS_SHARED_CREDENTIALS_FILE: /home/node/.aws/credentials
+    volumes:
+      - ./config/accounts.json:/app/config/accounts.json:ro
+      - ${HOME}/.aws:/home/node/.aws:ro
+      - ./scripts:/app/scripts:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp

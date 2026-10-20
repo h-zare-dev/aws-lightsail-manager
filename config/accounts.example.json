@@ -1,0 +1,14 @@
+{
+  "accounts": [
+    {
+      "alias": "personal",
+      "profile": "lightsail-personal",
+      "regions": ["eu-central-1", "eu-west-1"]
+    },
+    {
+      "alias": "business",
+      "profile": "lightsail-business",
+      "regions": ["eu-central-1"]
+    }
+  ]
+}
