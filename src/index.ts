@@ -178,7 +178,7 @@ bot.command('servers', ctx => guarded(ctx, async () => {
   await replySafe(ctx, `${details(c)}\n` + (all.map(x=>`${x.name} [${x.state?.name ?? '?'}]\n  Public: ${x.publicIpAddress ?? '-'} | Private: ${x.privateIpAddress ?? '-'}\n  ${x.blueprintId ?? '?'} / ${x.bundleId ?? '?'}`).join('\n') || 'No servers.'));
 }));
 bot.command('server', ctx => guarded(ctx, async () => {
-  const [name] = args(ctx,1,'/server INSTANCE'); checkName(name);
+  const [rawName] = args(ctx,1,'/server INSTANCE'); const name = checkName(rawName);
   const c=choice(ctx); const x=await aws.getInstance(c.account,c.region,name);
   if (!x) throw new Error('Instance not found.');
   await ctx.reply(`${details(c)}\n${x.name}\nStatus: ${x.state?.name}\nPublic IPv4: ${x.publicIpAddress || '-'}\nPrivate IPv4: ${x.privateIpAddress || '-'}\nZone: ${x.location?.availabilityZone || '-'}\nImage: ${x.blueprintId}\nBundle: ${x.bundleId}`);
