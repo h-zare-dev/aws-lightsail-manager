@@ -1,0 +1,25 @@
+# Production deployment: pull GHCR image; no Node.js or git on host.
+services:
+  lightsail-bot:
+    image: ghcr.io/h-zare-dev/aws-lightsail-manager:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      ACCOUNTS_CONFIG: /app/config/accounts.json
+      SCRIPTS_DIR: /app/scripts
+      AWS_SHARED_CREDENTIALS_FILE: /home/node/.aws/credentials
+      AWS_EC2_METADATA_DISABLED: "true"
+    volumes:
+      - ./config/accounts.json:/app/config/accounts.json:ro
+      - ./aws/credentials:/home/node/.aws/credentials:ro
+      - ./scripts:/app/scripts:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    pids_limit: 128
