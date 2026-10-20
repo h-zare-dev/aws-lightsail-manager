@@ -6,7 +6,7 @@ A self-hosted, **private-admin** Telegram bot to manage multiple AWS Lightsail a
 
 ## What works
 
-- Multiple AWS account aliases backed by locally stored AWS credential **profiles**; independent permitted region lists; `/account`, `/region` selection.
+- Multiple AWS account aliases backed by locally stored AWS credential **profiles**; independent permitted region lists; `/account`, `/region` selection with inline Telegram buttons.
 - List instances and details (including public/private IP), AWS regions/zones, available bundles and blueprints.
 - Create, start, stop, reboot and delete instances.
 - Launch with reviewed startup shell script (Lightsail `userData` from an approved local `scripts/` directory).
