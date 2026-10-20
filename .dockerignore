@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+config/accounts.json
+config/accounts.*.json
+!config/accounts.example.json
+.git
+*.log
+*.pem
+*.key
+credentials
