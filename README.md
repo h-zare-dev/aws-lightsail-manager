@@ -6,7 +6,7 @@ A self-hosted, **private-admin** Telegram bot to manage multiple AWS Lightsail a
 
 ## What works
 
-- Multiple AWS account aliases backed by locally stored AWS credential **profiles**; independent permitted region lists; `/account`, `/region` selection with inline Telegram buttons.
+- Multiple AWS account aliases backed by locally stored AWS credential **profiles**; independent permitted region lists; `/account`, `/region` selection.
 - List instances and details (including public/private IP), AWS regions/zones, available bundles and blueprints.
 - Create, start, stop, reboot and delete instances.
 - Launch with reviewed startup shell script (Lightsail `userData` from an approved local `scripts/` directory).
@@ -17,29 +17,35 @@ A self-hosted, **private-admin** Telegram bot to manage multiple AWS Lightsail a
 
 Out of scope for the MVP: disks, networking peering, DNS, load balancers, container services, relational databases, bucket management, automatic snapshot lifecycle, backups of AWS rules, analytics, and cross-account firewall replication. It does **not** modify an existing instance's AWS private IP.
 
-## Setup (Linux)
+## Production deployment: prebuilt Docker image (no Node.js on server)
 
-1. Create a new Telegram bot using [@BotFather](https://t.me/BotFather), then get your numeric Telegram user ID from a trusted local method. Keep the bot **private**.
-2. Set up an IAM identity **per AWS account** with appropriately restricted Lightsail permissions. For basic instances you can start with a scoped IAM policy. **Never use root access keys.** Consider roles/short-lived credentials if your environment supports them. See [AWS IAM for Lightsail](https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-managing-access-for-an-iam-user.html).
-3. Install Node.js 22+ and configure AWS profiles locally using the AWS CLI (`aws configure --profile lightsail-personal`) for each account. The bot reads the standard `~/.aws/credentials` file from the **machine hosting the bot**. You must provide **Access Key ID + Secret Access Key** for an IAM user when creating a static-credential profile; a single standalone API key is not enough.
-4. Configure and launch:
+**On every push/merge to `main`**, GitHub Actions runs unit tests, TypeScript typecheck, builds a Linux amd64/arm64 Docker image, and publishes it to the [GitHub Container Registry](https://github.com/h-zare-dev?tab=packages) as:
 
-```bash
-git clone https://github.com/h-zare-dev/aws-lightsail-manager.git
-cd aws-lightsail-manager
-cp .env.example .env
-cp config/accounts.example.json config/accounts.json
-# Edit .env with bot token and your numeric Telegram admin IDs.
-# Edit config/accounts.json with AWS profile names and allowed regions.
-npm install
-npm run check
-npm run build
-npm start
+```text
+ghcr.io/h-zare-dev/aws-lightsail-manager:latest
 ```
 
-> Until this feature branch is merged, clone then `git checkout feature/telegram-multi-account-mvp` before step 4.
+Tags `v*` publish their own versioned images. Pull requests only build and test the image; they do not publish it. The image includes Node.js and all application dependencies, so the deployment server needs **only Docker Engine, Docker Compose plugin, and curl**. The root `compose.yaml` remains for **local development only**; the deployment manifest is `deploy/compose.yaml` and uses `image:`, not `build:`.
 
-Example `~/.aws/credentials` (not part of the repository):
+### First-time setup (server)
+
+1. Create a Telegram bot with [@BotFather](https://t.me/BotFather) and find your **numeric** Telegram ID. Create narrowly scoped IAM credentials for each AWS account (not root credentials). Do not send any secrets to Telegram or commit them to GitHub.
+2. On your Docker server run this command once (review the installer first if desired):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/h-zare-dev/aws-lightsail-manager/main/deploy/install.sh -o /tmp/lightsail-install.sh && sudo bash /tmp/lightsail-install.sh
+```
+
+The installer creates `/opt/aws-lightsail-manager/`, downloads the Compose and example config files, and **does not start** the container. It preserves existing credentials/configuration on subsequent runs. The container runs as UID 1000; the installer sets `config/accounts.json` and `aws/credentials` ownership to UID 1000 with permissions `0600`. On shared hosts, ensure UID 1000 is trusted or choose a more isolated deployment host.
+
+3. Edit the following **local files on the server** (never push to GitHub):
+
+- `/opt/aws-lightsail-manager/.env`: set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ADMIN_IDS` (numeric, comma-separated); optionally set `IMAGE_TAG=latest`.
+- `/opt/aws-lightsail-manager/config/accounts.json`: give each AWS account an alias, corresponding local credential profile name and permitted regions.
+- `/opt/aws-lightsail-manager/aws/credentials`: standard AWS shared credentials file containing each corresponding profile.
+- `/opt/aws-lightsail-manager/scripts/`: approved `.sh` user-data scripts. These are mounted read-only and run **on a new AWS instance as root**, only when requested with `/create_script`.
+
+Example AWS credential file (fictitious placeholders):
 
 ```ini
 [lightsail-personal]
@@ -51,18 +57,45 @@ aws_access_key_id = OTHER_ACCESS_KEY_ID
 aws_secret_access_key = OTHER_SECRET_ACCESS_KEY
 ```
 
-Use file permissions `chmod 600 ~/.aws/credentials .env config/accounts.json` where appropriate; keep these out of all repository commits. The bot never accepts credentials over Telegram.
+Ensure `config/accounts.json` profile names match these sections. **Do not use the AWS account's root access keys.** The image is configured to read this mounted file, not an AWS CLI installation.
 
-## Docker Compose alternative
-
-After creating `.env`, `config/accounts.json`, and AWS credential profiles as above, run:
+4. Start the container by pulling the published image:
 
 ```bash
-docker compose up -d --build
-docker compose logs -f lightsail-bot
+cd /opt/aws-lightsail-manager
+sudo docker compose pull && sudo docker compose up -d --force-recreate
+sudo docker compose ps
 ```
 
-Your host's `~/.aws/` directory is mounted **read-only**. Ensure the account running Docker has the credentials configured and the files are readable by the container's Node user (UID 1000). The container itself runs as a non-root user with a read-only filesystem. Do not expose the Telegram bot token via public logs.
+### Upgrade after any new successful main-branch image release
+
+```bash
+cd /opt/aws-lightsail-manager && sudo docker compose pull && sudo docker compose up -d --force-recreate
+```
+
+The image is downloaded and the bot container is replaced. Your AWS credentials and config **remain on the host**. No Node.js, npm or `git pull` is required. To inspect logs, run `sudo docker compose logs --tail=100 -f lightsail-bot`. To pin a release use `IMAGE_TAG=v1.2.3` in the server-side `.env` once that tag has been published. `latest` changes whenever `main` is pushed and the image-publishing workflow succeeds.
+
+**First publication may be private:** GitHub's container registry defaults new packages to private, even for a public repository. To pull anonymously, change the package visibility to Public in GitHub's Packages settings **after** the first successful release; this is a manual choice and exposes the image contents, not the runtime credentials. Otherwise authenticate once on the server using a GitHub PAT (classic) with `read:packages`:
+
+```bash
+# Run the interactive login and paste a read:packages token when prompted.
+sudo docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```
+
+Avoid placing the token in shell history or plaintext scripts. The GitHub Actions publisher uses `GITHUB_TOKEN` automatically; no publishing PAT is needed. If `docker compose pull` returns `unauthorized`, verify package visibility or your registry login. The app needs outbound HTTPS access to the Telegram Bot API and AWS; **no inbound ports** need to be published by Docker.
+
+## Local development (optional)
+
+Install Node.js 22+ on a development machine (never required on the deployment host), configure `config/accounts.json` and `~/.aws/credentials`, and then run:
+
+```bash
+npm install
+npm run check
+npm run build
+npm start
+```
+
+For a **local Docker build only**, the root `compose.yaml` accepts `docker compose up -d --build`. This is intentionally different from the production prebuilt-image deployment.
 
 ## Commands
 
@@ -111,7 +144,7 @@ npm run build  # compiled runtime
 npm run dev    # watch mode
 ```
 
-CI (GitHub Actions) runs tests, typecheck and build. Unit tests do not call AWS. Integration tests are not included in the MVP and must be run only against expendable Lightsail instances with explicit approval.
+CI (GitHub Actions) runs tests, typecheck and Docker image build on PRs; on main pushes it also publishes the multi-architecture image to GHCR. Unit tests do not call AWS. Integration tests are not included in the MVP and must be run only against expendable Lightsail instances with explicit approval.
 
 ## AWS documentation
 
