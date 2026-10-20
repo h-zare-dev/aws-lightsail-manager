@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard, type Context } from 'grammy';
-import { readFile, lstat } from 'node:fs/promises';
+import { readFile, lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadConfig, type Account } from './config.js';
 import { LightsailService } from './aws.js';
@@ -12,6 +12,17 @@ const aws = new LightsailService();
 const confirms = new Confirmations();
 type Choice = { account: Account; region: string };
 const selections = new Map<number, Choice>();
+
+function accountKeyboard() {
+  const keyboard = new InlineKeyboard();
+  for (const account of config.accounts) keyboard.text(account.alias, `pick-account:${account.alias}`).row();
+  return keyboard;
+}
+function regionKeyboard(account: Account) {
+  const keyboard = new InlineKeyboard();
+  for (const region of account.regions) keyboard.text(region, `pick-region:${region}`).row();
+  return keyboard;
+}
 
 // The bot does NOT support group chats; membership and access are checked on all updates.
 bot.use(async (ctx, next) => {
@@ -92,6 +103,7 @@ All actions use the selected AWS account and region. No AWS secrets travel throu
 
 Navigation:
 /accounts  /account ALIAS  /region REGION  /regions
+/scripts (list approved startup scripts)
 /servers  /server NAME  /plans  /images
 
 Servers:
@@ -141,7 +153,7 @@ bot.callbackQuery(/^menu:(servers|snapshots|firewall|staticips|accounts|help)$/,
   const sel = choice(ctx);
   if (mode === 'help') return replySafe(ctx, help);
   if (mode === 'firewall') return ctx.reply('/firewall INSTANCE\n/open INSTANCE tcp 1000 60000 0.0.0.0/0\n/clone_rules SOURCE TARGET');
-  if (mode === 'accounts') return ctx.reply(config.accounts.map(a => `${a.alias}: ${a.regions.join(', ')}`).join('\n'));
+  if (mode === 'accounts') return ctx.reply(config.accounts.map(a => `${a.alias}: ${a.regions.join(', ')}`).join('\n'), {reply_markup:accountKeyboard()});
   if (mode === 'servers') return replySafe(ctx, (await aws.instances(sel.account,sel.region)).map(x => `${x.name} | ${x.state?.name} | Public ${x.publicIpAddress || '-'} | Private ${x.privateIpAddress || '-'}`).join('\n') || 'No instances.');
   if (mode === 'snapshots') return replySafe(ctx, (await aws.snapshots(sel.account,sel.region)).map(s => `${s.name} | ${s.state} | ${s.fromInstanceName}`).join('\n') || 'No snapshots.');
   return replySafe(ctx, (await aws.staticIps(sel.account,sel.region)).map(x => `${x.name}: ${x.ipAddress} → ${x.attachedTo || 'unattached'}`).join('\n') || 'No static IPs.');
@@ -149,7 +161,7 @@ bot.callbackQuery(/^menu:(servers|snapshots|firewall|staticips|accounts|help)$/,
 
 bot.command('accounts', ctx => guarded(ctx, async () => {
   const selected = choice(ctx);
-  await ctx.reply(config.accounts.map(a => `${a.alias === selected.account.alias ? '✓ ' : ''}${a.alias}: ${a.regions.join(', ')}`).join('\n') + '\nSelect: /account ALIAS');
+  await ctx.reply(config.accounts.map(a => `${a.alias === selected.account.alias ? '✓ ' : ''}${a.alias}: ${a.regions.join(', ')}`).join('\n') + '\nSelect: /account ALIAS or tap below:', {reply_markup:accountKeyboard()});
 }));
 bot.command('account', ctx => guarded(ctx, async () => {
   const [rawAlias] = args(ctx,1,'/account ALIAS');
@@ -159,6 +171,21 @@ bot.command('account', ctx => guarded(ctx, async () => {
   selections.set(ctx.from!.id,{account, region:account.regions[0]!});
   await ctx.reply(`Selected: ${details(choice(ctx))}`);
 }));
+bot.callbackQuery(/^pick-account:([a-zA-Z][a-zA-Z0-9_-]{1,30})$/, ctx => guarded(ctx, async () => {
+  const account = config.accounts.find(x => x.alias === ctx.match[1]);
+  await ctx.answerCallbackQuery();
+  if (!account) throw new Error('Account not in allowed configuration.');
+  selections.set(ctx.from.id, {account,region:account.regions[0]!});
+  await ctx.reply(`Selected: ${details(choice(ctx))}`, {reply_markup:regionKeyboard(account)});
+}));
+bot.callbackQuery(/^pick-region:([a-z]{2}(?:-gov)?-[a-z]+-\d+)$/, ctx => guarded(ctx, async () => {
+  const selected = choice(ctx), region = checkRegion(ctx.match[1]);
+  await ctx.answerCallbackQuery();
+  if (!selected.account.regions.includes(region)) throw new Error('Region is not allowed for this account.');
+  selections.set(ctx.from.id,{account:selected.account,region});
+  await ctx.reply(`Selected: ${details(choice(ctx))}`);
+}));
+
 bot.command('region', ctx => guarded(ctx, async () => {
   const [rawRegion] = args(ctx,1,'/region eu-central-1');
   const region = checkRegion(rawRegion);
@@ -171,7 +198,15 @@ bot.command('regions', ctx => guarded(ctx, async () => {
   const c = choice(ctx);
   const list = await aws.regions(c.account,c.region);
   await replySafe(ctx, `Allowed regions: ${c.account.regions.join(', ')}\n\nAWS regions:\n` + list.map(x => `${x.name}: ${(x.availabilityZones??[]).map(z=>z.zoneName).join(', ')}`).join('\n'));
+  await ctx.reply('Choose one of your permitted regions:', {reply_markup:regionKeyboard(c.account)});
 }));
+bot.command('scripts', ctx => guarded(ctx, async () => {
+  const names = (await readdir(config.scriptsDir)).filter(name => {
+    try { checkScriptName(name); return true; } catch { return false; }
+  });
+  await replySafe(ctx, `Approved startup script filenames (inspect files locally before use):\n${names.join('\n') || '(none)'}`);
+}));
+
 bot.command('servers', ctx => guarded(ctx, async () => {
   const c=choice(ctx);
   const all=await aws.instances(c.account,c.region);
@@ -293,7 +328,9 @@ bot.catch(({error,ctx}) => {
 await bot.api.setMyCommands([
   {command:'menu',description:'Show management menu'},
   {command:'help',description:'All commands and safety notes'},
-  {command:'accounts',description:'List configured AWS accounts'},
+  {command:'accounts',description:'Choose configured AWS account'},
+  {command:'regions',description:'List and choose AWS region'},
+  {command:'scripts',description:'Show locally approved startup scripts'},
   {command:'servers',description:'List instances in selected region'},
   {command:'snapshots',description:'List manual snapshots'},
   {command:'static_ips',description:'List static IPv4 addresses'},
