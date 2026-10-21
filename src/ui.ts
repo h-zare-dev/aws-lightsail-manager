@@ -52,7 +52,7 @@ export function registerInteractiveUi({bot,aws,config,choice,select,guarded,ask}
  }
  async function help(ctx:Context){
    const c=current(ctx),k=new InlineKeyboard();add(k,ctx,c,'⬅️ Menu',x=>home(x));
-   await send(ctx,'❔ <b>Control panel</b>\n\nTap a server for status, hardware, all IPv4/IPv6 addresses and management buttons. IP Copy buttons copy the exact address.\n\nEvery AWS change requires a separate confirmation expiring after two minutes.\n\nAdvanced commands such as /create_script and /clone_rules are still supported. Type /cancel to exit a form.',k);
+   await send(ctx,'❔ <b>Control panel</b>\n\nTap a server for status, hardware, all IPv4/IPv6 addresses and management buttons. Tap or long-press the monospace IP addresses to copy them.\n\nEvery AWS change requires a separate confirmation expiring after two minutes.\n\nAdvanced commands such as /create_script and /clone_rules are still supported. Type /cancel to exit a form.',k);
  }
  async function accounts(ctx:Context){
    const c=current(ctx),k=new InlineKeyboard();
@@ -89,11 +89,9 @@ export function registerInteractiveUi({bot,aws,config,choice,select,guarded,ask}
    try{const b=(await aws.bundles(c.account,c.region)).find(b=>b.bundleId===i.bundleId);
       if(b)price='\n💰 Bundle: $'+esc(b.price)+'/month (plus other charges)';
    }catch{/*price metadata is optional*/}
+
+   // IPs are shown as copyable <code> text in the card itself.
    const k=new InlineKeyboard();
-   if(i.publicIpAddress)k.copyText('📋 Copy Public IPv4',i.publicIpAddress);
-   if(i.privateIpAddress)k.copyText('📋 Copy Private IPv4',i.privateIpAddress);
-   if(i.publicIpAddress||i.privateIpAddress)k.row();
-   for(const ip of v6.slice(0,3))k.copyText('📋 Copy IPv6',ip).row();
    if(i.state?.name==='running'){
       add(k,ctx,c,'🔄 Reboot',x=>power(x,name,'reboot'));add(k,ctx,c,'🔴 Power OFF',x=>power(x,name,'stop'));k.row();
    }else if(i.state?.name==='stopped'){add(k,ctx,c,'🟢 Power ON',x=>power(x,name,'start')).row();}
