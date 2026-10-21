@@ -4,6 +4,16 @@ A self-hosted, **private-admin** Telegram bot to manage multiple AWS Lightsail a
 
 > **Safety status:** Development MVP. No AWS resources are touched by installation or tests. Live operations run **only** after the administrator requests them and confirms the 2-minute button. Verify using a disposable AWS account before production use. AWS calls can incur charges. Never send access keys to the bot/chat or commit them to GitHub.
 
+## Interactive Telegram dashboard (new)
+
+Use `/start` or `/menu` for a button-based management dashboard modeled on a server-control panel, with zero shell commands needed for routine operations. Choose the AWS **account** and **region** in the menu, then tap a server to view its status, location, blueprint, vCPU, RAM, disk capacity, estimated monthly bundle price, public IPv4 (static/dynamic), private IPv4 and IPv6. The `Copy` inline buttons copy addresses to the device clipboard (requires a Telegram client supporting copy-text buttons).
+
+The server card offers **Power ON/OFF, reboot, delete, manual snapshots, firewall and static IP management**. Snapshot lists support restoring to a **new** instance and deleting individual snapshots; the provisioning flow guides you through a server name, zone, OS image and bundle using buttons. Firewall controls display IPv4/IPv6 rules, expose common-port presets and a custom-rule form; static IP screens offer copy, attach, detach, allocate and release. Lists are paginated so long accounts remain usable.
+
+**Safety:** All resource-mutating actions still use the existing 2-minute separate confirmation gate; just opening a screen does not call any mutation API. Callback tokens are opaque, short, scoped to the admin and selected account/region, and expire. No AWS keys are sent through Telegram. Existing advanced slash commands such as `/create_script`, `/clone_rules` and `/close` remain available. For form input, send ordinary text; `/cancel` returns to the menu.
+
+**Lightsail limitations:** There is no general traffic-counter reset or in-place change of an instance's private IPv4; restoring a snapshot does not copy custom Lightsail firewall rules. The interface does not implement a web SSH console, in-place OS rebuild or replacement of a running server's boot image. These require separately reviewed workflows. The menu offers only the operations supported and implemented by this bot.
+
 ## What works
 
 - Multiple AWS account aliases backed by locally stored AWS credential **profiles**; independent permitted region lists; `/account`, `/region` selection.
