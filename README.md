@@ -6,7 +6,7 @@ A self-hosted, **private-admin** Telegram bot to manage multiple AWS Lightsail a
 
 ## Interactive Telegram dashboard (new)
 
-Use `/start` or `/menu` for a button-based management dashboard modeled on a server-control panel, with zero shell commands needed for routine operations. Choose the AWS **account** and **region** in the menu, then tap a server to view its status, location, blueprint, vCPU, RAM, disk capacity, estimated monthly bundle price, public IPv4 (static/dynamic), private IPv4 and IPv6. The `Copy` inline buttons copy addresses to the device clipboard (requires a Telegram client supporting copy-text buttons).
+Use `/start` or `/menu` for a button-based management dashboard modeled on a server-control panel, with zero shell commands needed for routine operations. Choose the AWS **account** and **region** in the menu, then tap a server to view its status, location, blueprint, vCPU, RAM, disk capacity, estimated monthly bundle price, public IPv4 (static/dynamic), private IPv4 and IPv6. Addresses are formatted as monospace text in the server card for easy tap/long-press selection and copying; no dedicated IP copy buttons clutter that card.
 
 The server card offers **Power ON/OFF, reboot, delete, manual snapshots, firewall and static IP management**. Snapshot lists support restoring to a **new** instance and deleting individual snapshots; the provisioning flow guides you through a server name, zone, OS image and bundle using buttons. Firewall controls display IPv4/IPv6 rules, expose common-port presets and a custom-rule form; static IP screens offer copy, attach, detach, allocate and release. Lists are paginated so long accounts remain usable.
 
