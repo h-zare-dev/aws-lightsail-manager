@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadConfig, type Account } from './config.js';
 import { LightsailService } from './aws.js';
 import { Confirmations } from './confirm.js';
+import { registerInteractiveUi } from './ui.js';
 import { checkAlias, checkRegion, checkName, checkZone, makePortInfo, checkScriptName } from './policy.mjs';
 
 const config = loadConfig();
@@ -135,6 +136,12 @@ Static IPv4:
 Every write requires a timed confirmation button. Names must contain no spaces. IPv4/IPv6 CIDR is supported. User-data scripts must be on the host in scripts/ (never Telegram uploads).
 
 Note: a new instance restored from a snapshot has DEFAULT firewall rules, not custom ones. Run /clone_rules after restoration, reviewing the source first.`;
+
+registerInteractiveUi({
+  bot, aws, config, choice,
+  select: (userId, selected) => selections.set(userId, selected),
+  ask, guarded
+});
 
 bot.command(['start','help'], ctx => guarded(ctx, async () => {
   const selected = choice(ctx);
@@ -326,8 +333,10 @@ bot.catch(({error,ctx}) => {
 });
 
 await bot.api.setMyCommands([
-  {command:'menu',description:'Show management menu'},
-  {command:'help',description:'All commands and safety notes'},
+  {command:'start',description:'Interactive Lightsail dashboard'},
+  {command:'menu',description:'Show interactive control panel'},
+  {command:'help',description:'Help and safety'},
+  {command:'cancel',description:'Cancel interactive form'},
   {command:'accounts',description:'Choose configured AWS account'},
   {command:'regions',description:'List and choose AWS region'},
   {command:'scripts',description:'Show locally approved startup scripts'},
