@@ -38,7 +38,7 @@ function setup() {
  }
  return {ctx,c,replies,writes,commands,click};
 }
-test('home dashboard and server cards show copyable public/private IPv4 and IPv6',async()=>{
+test('server cards show selectable IP addresses without copy-only buttons',async()=>{
  const s=setup();
  await s.commands.get('start')(s.ctx);
  assert.match(s.replies.at(-1).body,/LIGHTSAIL MANAGEMENT/);
@@ -53,8 +53,12 @@ test('home dashboard and server cards show copyable public/private IPv4 and IPv6
  assert.match(card.body,/198\.51\.100\.9/);
  assert.match(card.body,/2001:db8::1/);
  const buttons=card.opts.reply_markup.inline_keyboard.flat();
- const copy=buttons.filter(x=>x.copy_text).map(x=>x.copy_text.text);
- assert.deepEqual(copy,['198.51.100.9','172.26.2.214','2001:db8::1']);
+ assert.match(card.body,/<code>198\.51\.100\.9<\/code>/);
+ assert.match(card.body,/<code>172\.26\.2\.214<\/code>/);
+ assert.match(card.body,/<code>2001:db8::1<\/code>/);
+ assert.equal(buttons.filter(x=>x.copy_text).length,0,'no redundant IP copy buttons');
+ assert.ok(buttons.some(x=>x.text.includes('Reboot')));
+ assert.ok(buttons.some(x=>x.text.includes('Snapshot')));
  assert.equal(s.writes.length,0);
 });
 test('server mutations require the separate timed confirmation action',async()=>{
